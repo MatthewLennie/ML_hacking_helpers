@@ -596,6 +596,41 @@ def example_normalized_mnist():
         traceback.print_exc()
 
 
+def example_usage():
+    """
+    DataVis API Usage Examples
+    -------------------------
+    
+    # Create a DataVis instance with various data types
+    vis = DataVis(images, labels)                  # Numpy arrays or torch tensors
+    vis = DataVis(dataset)                         # PyTorch Dataset
+    vis = DataVis(dataloader)                      # PyTorch DataLoader
+    vis = DataVis(hugging_face_dataset)            # Hugging Face dataset
+    
+    # Basic visualization
+    vis.plot_sample()                              # Plot single random sample
+    vis.plot_sample(idx=5)                         # Plot specific sample
+    vis.plot_samples(n=16, nrow=4)                 # Plot grid of samples
+    
+    # Dataset analysis
+    vis.plot_class_distribution()                  # Plot class distribution
+    vis.plot_pixel_stats(stat='mean')              # Plot pixel statistics
+    vis.plot_pixel_stats(stat='std')               # Plot pixel standard deviation
+    vis.plot_fft_histogram(n_samples=50)           # Analyze frequency components
+    
+    # Filtering operations (all return new DataVis instances)
+    filtered = vis.filter_blank()                  # Remove blank images
+    filtered = vis.filter_noise()                  # Remove noisy images
+    filtered = vis.filter_custom(custom_fn)        # Apply custom filter function
+    
+    # Save and load datasets
+    filtered.save("dataset_path", format="numpy")  # Save as numpy arrays
+    filtered.save("dataset_path", format="torch")  # Save as torch tensors
+    loaded = DataVis.load("dataset_path.npy")      # Load from saved files
+    """
+    pass
+
+
 # Run examples
 if __name__ == "__main__":
     print("DataVis Module Examples with Real Datasets")
@@ -609,5 +644,8 @@ if __name__ == "__main__":
     example_dataloader()
     example_custom_bad_dataset()
     example_normalized_mnist()  # New example with normalized MNIST
+    
+    # Run succinct example
+    # example_usage()  # Uncomment to run the concise API example
     
     print(f"\nAll examples completed. Figures saved to: {figures_dir.absolute()}") 

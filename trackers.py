@@ -215,6 +215,39 @@ def test_parameter_tracker():
     # Compare parameters between the two models
     tracker1 = ParameterTracker(model)
     tracker1.describe().plot_parameters("parameters.png")
+
+def example_usage():
+    """
+    ML Model Trackers API Usage Examples
+    -----------------------------------
+    
+    # ActivationTracker - Monitor activation values through the network
+    tracker = ActivationTracker(model)            # Initialize with a PyTorch model
+    model(inputs)                                 # Run a forward pass to capture activations
+    tracker.plot_activations(save_name="path.png")# Plot activation histograms
+    tracker.activations_describe()                # Print stats for all activations
+    tracker.activations_describe(key_name="conv") # Print stats for layers containing "conv"
+    
+    # GradientTracker - Monitor gradients during backpropagation
+    tracker = GradientTracker(model)              # Initialize with a PyTorch model
+    outputs = model(inputs)                       # Forward pass
+    loss = loss_fn(outputs, targets)              # Compute loss
+    loss.backward()                               # Backward pass to capture gradients
+    tracker.plot_gradients(save_name="path.png")  # Plot gradient histograms
+    tracker.plot_grad_norms(save_name="path.png") # Plot gradient norm history
+    tracker.gradients_describe()                  # Print gradient statistics
+    
+    # ParameterTracker - Analyze model parameters
+    tracker = ParameterTracker(model)             # Initialize with a PyTorch model
+    tracker.describe()                            # Print all parameter statistics
+    tracker.describe(key_name="weight")           # Print stats for parameters containing "weight"
+    tracker.plot_parameters(save_name="path.png") # Plot parameter histograms
+    
+    # Method chaining is supported
+    ParameterTracker(model).describe().plot_parameters("params.png")
+    """
+    pass
+
 if __name__ == "__main__":
     test_activation_tracker()
     test_gradient_tracker()
