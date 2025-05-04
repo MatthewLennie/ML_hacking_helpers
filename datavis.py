@@ -330,9 +330,6 @@ class DataVis:
             save: Whether to save the figure (default: True)
             display: Whether to display the figure (default: True)
             name: Optional filename for saving (default: auto-generated)
-            
-        Returns:
-            tuple: (image, label, idx, figure_path)
         """
         img, label, idx = self.get_sample(idx)
         
@@ -360,13 +357,10 @@ class DataVis:
             name = f"sample_{idx}"
         
         # Save and/or display figure
-        path = None
         if save:
-            path = self._save_figure(name, display=display)
+            self._save_figure(name, display=display)
         elif display:
             plt.show()
-        
-        return img, label, idx, path
     
     def plot_samples(self, n=16, nrow=4, figsize=(10, 10), random_samples=True, 
                      with_labels=True, save=True, display=True, name=None):
@@ -382,9 +376,6 @@ class DataVis:
             save: Whether to save the figure (default: True)
             display: Whether to display the figure (default: True)
             name: Optional filename for saving (default: auto-generated)
-            
-        Returns:
-            tuple: (images, labels, indices, figure_path)
         """
         n = min(n, len(self.dataset))
         indices = random.sample(range(len(self.dataset)), n) if random_samples else list(range(n))
@@ -432,13 +423,10 @@ class DataVis:
             name = f"samples_grid_{n}"
         
         # Save and/or display figure
-        path = None
         if save:
-            path = self._save_figure(name, display=display)
+            self._save_figure(name, display=display)
         elif display:
             plt.show()
-        
-        return images, labels, indices, path
     
     def filter_noise(self, threshold=10, freq_cutoff=14):
         """
@@ -939,55 +927,3 @@ class DataVis:
         else:
             raise ValueError(f"Unsupported file format: {path.suffix}")
     
-    @staticmethod
-    def from_huggingface(dataset, output_dir="figures", image_key="image", label_key="label", split="train"):
-        """
-        Create a DataVis instance from a Hugging Face dataset.
-        
-        Args:
-            dataset: Dataset name or actual dataset object from Hugging Face
-            output_dir: Directory to save figures
-            image_key: Key for images in the dataset
-            label_key: Key for labels in the dataset
-            split: Dataset split to use (train, validation, test)
-            
-        Returns:
-            DataVis: A new DataVis instance with the dataset
-        """
-        raise NotImplementedError("Hugging Face datasets are not yet supported")
-        try:
-            # Import here to avoid hard dependency
-            from datasets import load_dataset, Dataset
-            
-            # If dataset is a string, load it from Hugging Face
-            if isinstance(dataset, str):
-                try:
-                    loaded_dataset = load_dataset(dataset, split=split)
-                    print(f"Loaded '{dataset}' from Hugging Face")
-                    
-                    # Check if loaded_dataset has the required keys
-                    if image_key not in loaded_dataset.column_names:
-                        available_keys = loaded_dataset.column_names
-                        print(f"Warning: Dataset does not have an '{image_key}' column. "
-                              f"Available columns: {available_keys}")
-                        
-                        # Try to find a suitable image key
-                        for key in available_keys:
-                            if 'image' in key.lower():
-                                print(f"Using '{key}' as the image key instead")
-                                image_key = key
-                                break
-                    
-                    dataset = loaded_dataset
-                except Exception as e:
-                    raise ValueError(f"Failed to load dataset '{dataset}': {str(e)}")
-            
-            # Create DataVis instance with the dataset
-            vis = DataVis(dataset, output_dir=output_dir, image_key=image_key, label_key=label_key)
-            print(f"Successfully created DataVis with Hugging Face dataset")
-            return vis
-            
-        except ImportError:
-            raise ImportError("To use Hugging Face datasets, install the 'datasets' package: pip install datasets")
-        except Exception as e:
-            raise ValueError(f"Failed to create DataVis with Hugging Face dataset: {str(e)}") 
