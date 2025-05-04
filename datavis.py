@@ -215,9 +215,38 @@ class DataVis:
         if img.shape[0] > 3:
             img = img[:3]
         
-        # Make sure values are between 0 and 1 for displaying
-        if img.max() > 1.0:
-            img = img / 255.0
+        # Normalize values to [0, 1] range for displaying
+        min_val = img.min().item()
+        max_val = img.max().item()
+        
+        # First check if image is already in [0, 1] range
+        if 0 <= min_val and max_val <= 1:
+            # Image is already properly scaled
+            pass
+        # MNIST normalization detection (mean=0.1307, std=0.3081)
+        elif -0.5 < min_val < 0 and max_val < 0.9:
+            # This looks like a normalized MNIST image
+            # De-normalize: img = img * std + mean
+            img = img * 0.3081 + 0.1307
+        # ImageNet normalization detection
+        elif -3 < min_val < -1 and 1 < max_val < 3:
+            # This looks like ImageNet normalization - rescale to [0,1] range
+            img = (img - min_val) / (max_val - min_val)
+        # Generic normalization with negative values
+        elif min_val < 0:
+            # Rescale from [min, max] to [0, 1]
+            img = (img - min_val) / (max_val - min_val + 1e-8)
+        # Values above 1 but not negative (e.g. 0-255 range)
+        elif max_val > 1:
+            if max_val <= 255:
+                # Standard 0-255 range
+                img = img / 255.0
+            else:
+                # Arbitrary large values
+                img = img / max_val
+        
+        # Final safety clip to ensure valid display range
+        img = torch.clamp(img, 0.0, 1.0)
         
         return img
     

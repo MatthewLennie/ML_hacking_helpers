@@ -227,9 +227,10 @@ def example_torchvision():
     print("\n=== Example 3: Using Fashion-MNIST with torchvision dataset ===")
     
     try:
-        # Load Fashion-MNIST dataset
+        # Load Fashion-MNIST dataset with proper normalization
         fashion_transform = transforms.Compose([
             transforms.ToTensor(),
+            # No normalization here - let DataVis handle it
         ])
         
         fashion_train = datasets.FashionMNIST('./data', train=True, download=True, transform=fashion_transform)
@@ -241,6 +242,7 @@ def example_torchvision():
         print(f"Fashion-MNIST dataset loaded, length: {len(fashion_train)}")
         sample_img, sample_label = fashion_train[0]
         print(f"Sample image shape: {sample_img.shape}, Sample label: {sample_label} ({fashion_classes[sample_label]})")
+        print(f"Sample image value range: [{sample_img.min().item():.4f}, {sample_img.max().item():.4f}]")
         
         # Initialize DataVis with torchvision dataset
         vis = DataVis(fashion_train, output_dir="figures/fashion_mnist")
@@ -279,7 +281,13 @@ def example_torchvision():
         # Fallback to regular MNIST if Fashion-MNIST fails
         print("Falling back to regular MNIST")
         try:
+            # For MNIST, explicitly avoid normalization to address the negative values issue
             mnist_train = datasets.MNIST('./data', train=True, download=True, transform=transforms.ToTensor())
+            
+            # Check value range
+            sample_img, _ = mnist_train[0]
+            print(f"MNIST sample image value range: [{sample_img.min().item():.4f}, {sample_img.max().item():.4f}]")
+            
             vis = DataVis(mnist_train, output_dir="figures/mnist")
             vis.plot_samples(n=25, nrow=5, name="mnist_samples_grid")
         except Exception as e2:
@@ -471,110 +479,121 @@ def example_custom_bad_dataset():
         vis.plot_samples(n=16, nrow=4, name="generated_bad_mnist_samples")
 
 
-# Example 6: Using with Hugging Face datasets
-def example_huggingface():
-    print("\n=== Example 6: Using with Hugging Face datasets ===")
+# Example 5: Using MNIST with normalization via DataLoader
+def example_normalized_mnist():
+    print("\n=== Example 5: Using MNIST with normalization via DataLoader ===")
+    
+    def get_mnist_dataloaders(batch_size=128, num_workers=2, data_dir='./data'):
+        """
+        Create and return dataloaders for the MNIST dataset with normalization.
+        
+        Args:
+            batch_size (int): Number of samples per batch.
+            num_workers (int): Number of subprocesses for data loading.
+            data_dir (str): Directory to store the downloaded dataset.
+            
+        Returns:
+            train_loader, test_loader: DataLoader objects for training and testing datasets.
+        """
+        # Define transformations with normalization
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))  # Mean and std for MNIST
+        ])
+        
+        # Download and load training data
+        train_dataset = datasets.MNIST(
+            root=data_dir,
+            train=True,
+            download=True,
+            transform=transform
+        )
+        
+        # Download and load test data
+        test_dataset = datasets.MNIST(
+            root=data_dir,
+            train=False,
+            download=True,
+            transform=transform
+        )
+        
+        # Create dataloaders
+        train_loader = DataLoader(
+            dataset=train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            pin_memory=True
+        )
+        
+        test_loader = DataLoader(
+            dataset=test_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=True
+        )
+        
+        return train_loader, test_loader
     
     try:
-        # Import required libraries
+        # Get the normalized MNIST dataloaders
+        train_loader, test_loader = get_mnist_dataloaders(batch_size=64, num_workers=2)
+        
+        print(f"MNIST train loader created with {len(train_loader.dataset)} samples")
+        print(f"MNIST test loader created with {len(test_loader.dataset)} samples")
+        
+        # Check the value range of a sample to verify normalization
+        sample_batch = next(iter(train_loader))
+        sample_img = sample_batch[0][0]  # First image of first batch
+        sample_label = sample_batch[1][0]  # First label of first batch
+        
+        print(f"Sample image shape: {sample_img.shape}")
+        print(f"Sample image value range: [{sample_img.min().item():.4f}, {sample_img.max().item():.4f}]")
+        print(f"Sample label: {sample_label.item()}")
+        
+        # Create DataVis directly with the normalized data loader - it should handle normalization
+        print("\nCreating DataVis with normalized train loader...")
+        vis = DataVis(train_loader, output_dir="figures/normalized_mnist")
+        
+        # Plot samples - DataVis should handle the normalization
+        vis.plot_samples(n=25, nrow=5, name="normalized_mnist_samples")
+        
+        # Plot class distribution
         try:
-            from datasets import load_dataset, Dataset
-            import numpy as np
-            huggingface_available = True
-        except ImportError:
-            print("Hugging Face datasets package not found. Install with: pip install datasets")
-            huggingface_available = False
+            class_counts, _ = vis.plot_class_distribution(name="normalized_mnist_class_distribution")
+            if class_counts is not None:
+                print("MNIST class distribution:")
+                for class_idx, count in class_counts.items():
+                    print(f"  Digit {class_idx}: {count} images")
+            else:
+                print("Could not generate class distribution")
+        except Exception as e:
+            print(f"Error plotting class distribution: {str(e)}")
         
-        if huggingface_available:
-            # Try loading a simple dataset (beans) that has images
-            print("Loading the 'beans' dataset from Hugging Face...")
-            try:
-                beans_dataset = load_dataset("beans", split="train[:100]")  # Just take first 100 for speed
-                print(f"Dataset loaded with {len(beans_dataset)} samples")
-                print(f"Dataset features: {beans_dataset.features}")
-                print(f"Dataset column names: {beans_dataset.column_names}")
-                
-                # Display a sample
-                first_item = beans_dataset[0]
-                print(f"Sample keys: {list(first_item.keys())}")
-                
-                # Create DataVis with proper image and label keys
-                image_key = "image"
-                label_key = "labels"
-                vis = DataVis(beans_dataset, output_dir="figures/beans", 
-                              image_key=image_key, label_key=label_key)
-                
-                # Visualize samples
-                print("Plotting sample images from beans dataset...")
-                vis.plot_samples(n=9, nrow=3, name="beans_samples")
-                
-                # Plot class distribution
-                try:
-                    class_counts, _ = vis.plot_class_distribution(name="beans_class_distribution")
-                    if class_counts:
-                        print("Class distribution:")
-                        for class_id, count in class_counts.items():
-                            # Check for class names in dataset features
-                            if hasattr(beans_dataset.features[label_key], 'names'):
-                                class_names = beans_dataset.features[label_key].names
-                                class_name = class_names[int(class_id)] if isinstance(class_id, str) else class_names[class_id]
-                                print(f"  Class {class_id} ({class_name}): {count}")
-                            else:
-                                print(f"  Class {class_id}: {count}")
-                except Exception as e:
-                    print(f"Error plotting class distribution: {str(e)}")
-                
-            except Exception as e:
-                print(f"Error with beans dataset: {str(e)}")
-                
-                # Try with MNIST as a fallback
-                print("\nTrying with 'mnist' dataset from Hugging Face...")
-                try:
-                    mnist_dataset = load_dataset("mnist", split="train[:100]")  # Just take first 100 for speed
-                    print(f"MNIST dataset loaded with {len(mnist_dataset)} samples")
-                    print(f"MNIST column names: {mnist_dataset.column_names}")
-                    
-                    # Create DataVis with proper image and label keys
-                    vis = DataVis(mnist_dataset, output_dir="figures/huggingface_mnist", 
-                                 image_key="image", label_key="label")
-                    
-                    # Visualize samples
-                    vis.plot_samples(n=25, nrow=5, name="huggingface_mnist_samples")
-                    
-                    # Plot class distribution
-                    class_counts, _ = vis.plot_class_distribution(name="huggingface_mnist_class_distribution")
-                    if class_counts:
-                        print("MNIST class distribution:")
-                        for class_id, count in class_counts.items():
-                            print(f"  Digit {class_id}: {count}")
-                    
-                except Exception as e:
-                    print(f"Fallback to MNIST also failed: {str(e)}")
+        # For comparison, also create a simple dataset without normalization
+        print("\nCreating standard MNIST dataset for comparison...")
+        simple_transform = transforms.Compose([transforms.ToTensor()])
+        standard_dataset = datasets.MNIST('./data', train=True, download=True, transform=simple_transform)
+        standard_loader = DataLoader(standard_dataset, batch_size=64, shuffle=True, num_workers=2)
         
-        # If all fails or Hugging Face is not available, create a mock dataset
-        if not huggingface_available or 'vis' not in locals():
-            print("\nCreating a mock Hugging Face style dataset")
-            # Create a simple dictionary-style dataset
-            class MockHFDataset(Dataset):
-                def __init__(self, size=100):
-                    self.size = size
-                
-                def __len__(self):
-                    return self.size
-                
-                def __getitem__(self, idx):
-                    # Create a random image and label
-                    img = torch.rand(3, 32, 32)
-                    label = torch.randint(0, 10, (1,)).item()
-                    return {"image": img, "label": label}
-            
-            mock_dataset = MockHFDataset(100)
-            # Directly create DataVis with our mock dataset
-            vis = DataVis(mock_dataset, output_dir="figures/mock_huggingface")
-            vis.plot_samples(n=16, nrow=4, name="mock_huggingface_samples")
-    
+        # Check value range of standard data
+        std_batch = next(iter(standard_loader))
+        std_img = std_batch[0][0]
+        print(f"Standard MNIST value range: [{std_img.min().item():.4f}, {std_img.max().item():.4f}]")
+        
+        # Create DataVis with standard data
+        standard_vis = DataVis(standard_loader, output_dir="figures/standard_mnist")
+        
+        # Plot samples from standard data
+        standard_vis.plot_samples(n=25, nrow=5, name="standard_mnist_samples")
+        
+        print("Successfully displayed both normalized and standard MNIST data")
+        
     except Exception as e:
-        print(f"Error in Hugging Face example: {str(e)}")
+        print(f"Error in normalized MNIST example: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 
 # Run examples
@@ -589,6 +608,6 @@ if __name__ == "__main__":
     example_torchvision()
     example_dataloader()
     example_custom_bad_dataset()
-    # example_huggingface()
+    example_normalized_mnist()  # New example with normalized MNIST
     
     print(f"\nAll examples completed. Figures saved to: {figures_dir.absolute()}") 
