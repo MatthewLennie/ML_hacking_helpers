@@ -2,7 +2,12 @@ import torch
 import torch.nn as nn
 import inspect
 import numpy as np
-from trackers import ParameterTracker
+try:
+    # Try relative import (when used as a module)
+    from .trackers import ParameterTracker
+except ImportError:
+    # Fall back to direct import (when run directly)
+    from trackers import ParameterTracker
 
 def initialize_model(model, constant_val=1e-4, verbose=False):
     """
@@ -181,7 +186,10 @@ def example_usage():
     check_initialization_quality(model)
     
     # Combine with other trackers for comprehensive analysis
-    from trackers import ActivationTracker, GradientTracker
+    try:
+        from .trackers import ActivationTracker, GradientTracker
+    except ImportError:
+        from trackers import ActivationTracker, GradientTracker
     
     model = YourModel()
     initialize_model(model)
