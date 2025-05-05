@@ -9,6 +9,47 @@ from typing import Optional, Union, Tuple, List, Dict, Any, Callable
 import math
 import os
 
+
+def example_usage():
+    """
+    DataVis API Usage Examples
+    -------------------------
+    
+    # Create a DataVis instance with various data types
+    vis = DataVis(images, labels)                  # Numpy arrays or torch tensors
+    vis = DataVis(dataset)                         # PyTorch Dataset
+    vis = DataVis(dataloader)                      # PyTorch DataLoader
+    vis = DataVis(hugging_face_dataset)            # Hugging Face dataset
+    
+    # Basic visualization
+    vis.plot_sample()                              # Plot single random sample
+    vis.plot_sample(idx=0)                         # Plot specific sample
+    vis.plot_samples(n=11, nrow=4)                 # Plot grid of samples
+    
+    # Dataset analysis
+    vis.plot_class_distribution()                  # Plot class distribution
+    vis.plot_pixel_stats(stat='mean')              # Plot pixel statistics
+    vis.plot_pixel_stats(stat='std')               # Plot pixel standard deviation
+    vis.plot_fft_histogram(n_samples=45)           # Analyze frequency components
+    
+    # Filtering operations (all return new DataVis instances)
+    filtered = vis.filter_blank()                  # Remove blank images
+    filtered = vis.filter_noise()                  # Remove noisy images
+    filtered = vis.filter_custom(custom_fn)        # Apply custom filter function
+    
+    # Save and load datasets
+    filtered.save("dataset_path", format="numpy")  # Save as numpy arrays
+    filtered.save("dataset_path", format="torch")  # Save as torch tensors
+    loaded = DataVis.load("dataset_path.npy")      # Load from saved files
+    """
+    pass
+
+
+
+
+
+
+
 class DataVis:
     """
     A class for visualizing and processing image datasets with a robust API that handles
@@ -686,30 +727,113 @@ class DataVis:
         Returns:
             tuple: (class_counts, figure_path) or (None, None) if no labels are available
         """
-        if self.labels is None:
-            print("No labels available to plot class distribution")
-            return None, None
+        # Handle different ways of accessing labels
+        labels = []
         
-        # Count classes
-        if isinstance(self.labels, torch.Tensor):
-            labels = self.labels.cpu().numpy()
+        # Method 1: Use self.labels if available
+        if self.labels is not None:
+            labels = self.labels.cpu().numpy() if isinstance(self.labels, torch.Tensor) else np.array(self.labels)
+        # Method 2: Try to extract labels from dataset
         else:
-            # Try to extract all labels from dataset
-            labels = []
-            for i in range(len(self.dataset)):
-                _, label, _ = self.get_sample(i)
-                if label is not None:
-                    # Handle different label types
-                    if hasattr(label, 'item'):
-                        labels.append(label.item())
-                    else:
-                        labels.append(label)
-            labels = np.array(labels)
+            # First, try with a small cache to see if we can get labels
+            if hasattr(self, '_sample_labels') and len(self._sample_labels) > 0:
+                has_valid_labels = any(label is not None for label in self._sample_labels)
+                if has_valid_labels:
+                    print("Using cached sample labels")
+                    labels = [
+                        label.item() if hasattr(label, 'item') else label 
+                        for label in self._sample_labels 
+                        if label is not None
+                    ]
+            
+            # If that didn't work, try more exhaustive extraction
+            if len(labels) == 0:
+                print("Extracting all labels from dataset...")
+                
+                # For DataLoader, sample a batch to check the format
+                if self.dataloader is not None:
+                    try:
+                        # Get a single batch and extract labels
+                        batch = next(iter(self.dataloader))
+                        if isinstance(batch, (list, tuple)) and len(batch) >= 2:
+                            batch_labels = batch[1]
+                            if isinstance(batch_labels, torch.Tensor):
+                                # Add all labels from this batch
+                                labels.extend(batch_labels.cpu().numpy())
+                            else:
+                                labels.extend(batch_labels)
+                            print(f"Extracted {len(labels)} labels from first batch")
+                    except Exception as e:
+                        print(f"Error extracting labels from dataloader: {str(e)}")
+                
+                # If we couldn't get labels from dataloader or don't have a dataloader,
+                # try extracting from the dataset directly
+                if len(labels) == 0 and self.dataset is not None:
+                    try:
+                        # Use tqdm for progress bar if available
+                        try:
+                            from tqdm import tqdm
+                            iterator = tqdm(range(len(self.dataset)), desc="Extracting labels")
+                        except ImportError:
+                            iterator = range(len(self.dataset))
+                            
+                        for i in iterator:
+                            try:
+                                # Try different ways to get labels
+                                if self.is_huggingface:
+                                    # Handle Hugging Face dataset with dictionary output
+                                    sample = self.dataset[i]
+                                    label = sample.get(self.label_key, None)
+                                else:
+                                    # Try standard Dataset interface for (img, label) tuple
+                                    sample = self.dataset[i]
+                                    if isinstance(sample, (list, tuple)) and len(sample) >= 2:
+                                        label = sample[1]
+                                    else:
+                                        # Try to see if it's a dictionary with the label key
+                                        if isinstance(sample, dict) and self.label_key in sample:
+                                            label = sample[self.label_key]
+                                        else:
+                                            continue  # Skip this sample if no label found
+                                
+                                # Convert to standard Python type if possible
+                                if hasattr(label, 'item'):
+                                    label = label.item()
+                                labels.append(label)
+                                
+                                # Early stop after some samples to check if we're getting labels
+                                if len(labels) == 1:
+                                    print(f"First label extracted: {label} (type: {type(label)})")
+                                if len(labels) > 1000:  # Don't need to process the entire dataset
+                                    break
+                            except Exception as e:
+                                print(f"Warning: Failed to extract label for item {i}: {str(e)}")
+                                if i < 5:  # Only show errors for first few items
+                                    import traceback
+                                    traceback.print_exc()
+                                continue
+                    except Exception as e:
+                        print(f"Error extracting labels from dataset: {str(e)}")
         
         # Check if we managed to collect any labels
         if len(labels) == 0:
-            print("No valid labels found in the dataset")
+            print("No valid labels found in the dataset. Cannot generate class distribution.")
             return None, None
+        
+        # Convert labels to numpy array if not already
+        if not isinstance(labels, np.ndarray):
+            try:
+                labels = np.array(labels)
+            except:
+                print("Could not convert labels to numpy array. Trying alternative approach...")
+                # Try to manually create an array of Python native types
+                cleaned_labels = []
+                for label in labels:
+                    if hasattr(label, 'item'):
+                        cleaned_labels.append(label.item())
+                    else:
+                        cleaned_labels.append(label)
+                labels = np.array(cleaned_labels)
         
         # Count occurrences of each label
         unique_labels, counts = np.unique(labels, return_counts=True)
